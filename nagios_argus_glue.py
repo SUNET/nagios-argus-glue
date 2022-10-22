@@ -22,10 +22,11 @@ def myfunc(argv,config_token):
     arg_servicestateid=0
     arg_lastservicestateid=0
     debug=0
+    sync=0
     arg_help = "{0} -d <description> --hostname <hostname> -s --servicestateid <id> --lastservicestateid <id> --lastproblemid <id> --problemid <id> --test --notification <id> --notification_number <#>".format(argv[0])
 
     try:
-        opts, args = getopt.getopt(argv[1:], "hi:u:o:", ["help", "description=","hostname=", "servicestateid=", "lastservicestateid=", "lastproblemid=", "problemid=", "notification=", "notification_number=","test"])
+        opts, args = getopt.getopt(argv[1:], "hi:u:o:", ["help", "description=","hostname=", "servicestateid=", "lastservicestateid=", "lastproblemid=", "problemid=", "notification=", "notification_number=","test","sync"])
     except:
         print(arg_help)
         sys.exit(2)
@@ -54,6 +55,8 @@ def myfunc(argv,config_token):
             arg_notification_number = arg
         elif opt in ("--test"):
             debug=1
+        elif opt in ("--sync"):
+            sync=1
 
     #Debug purpose
     if debug==1:
@@ -63,6 +66,11 @@ def myfunc(argv,config_token):
         print('lastservicestateid:', arg_lastservicestateid)
         print('problemid:', arg_problemid)
         print('lastproblemid:', arg_lastproblemid)
+
+
+    # TODO find a way to syncronize argus and nagios
+    #   if sync==1:
+    #       ...
 
 
     # TODO Create logic for Info,Warning,Critical
@@ -81,7 +89,7 @@ def myfunc(argv,config_token):
     #https://assets.nagios.com/downloads/nagioscore/docs/nagioscore/3/en/macrolist.html#hoststatetype
 
     #If Notification are disabled for the Service - EXIT Follows $SERVICENOTIFICATIONENABLED$
-    if (arg_notification == "NO" ):  
+    if (arg_notification == "NO" ):
         sys.exit(0)
 
     # Create incident with argus
@@ -97,7 +105,7 @@ def myfunc(argv,config_token):
             #State changed - clear case i Argus
             print('Clear incident')
             print(argv)
-            #Initiate argus-client object
+            #Initiate argus-client object TODO read api_root_url from config file
             c = Client(api_root_url="https://argus.cnaas.sunet.se:9000/api/v1", token=config_token)
             #Loop through incidents on Argus
             for incident in c.get_my_incidents(open=True):
@@ -109,7 +117,7 @@ def myfunc(argv,config_token):
                         print(incident.pk)
                         print("TEST FLAG DETECTED - nothing sent to argus")
                     else:
-                        print("PRODUCTION - sending to argus")
+#                        print("PRODUCTION - sending to argus")
                         c.resolve_incident(incident=incident.pk, description=arg_hostname+'-'+arg_description[0:115], timestamp=datetime.now())
                         sys.exit(0)
 
@@ -118,7 +126,7 @@ def myfunc(argv,config_token):
         if(int(arg_notification_number)==0 or int(arg_notification_number)>1):
             sys.exit(0)
         elif (int(arg_notification_number)==1):
-            #Initiate argus-client object
+            #Initiate argus-client object TODO read api_root_url from config file
             c = Client(api_root_url="https://argus.cnaas.sunet.se:9000/api/v1", token=config_token)
             i = Incident(
                 description=arg_hostname+'-'+arg_description[0:115], #Merge hostname + trunked description for better visibility in argus
