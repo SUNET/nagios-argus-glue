@@ -7,7 +7,7 @@ This is a glue service for integration between
 ## How it works
 
 `nagios_argus_glue` acts as a script meant to be triggered on each nagios check.
-Provided that the check has notifications are enabled and it matches the criteria of raising a new or 
+Provided that the check is enabled for notification enabled and it matches the criteria of raising a new or 
 closing an existing alarm, an update will be sent to Argus using the Argus API.
 
 ## Configuration
@@ -21,7 +21,7 @@ Enable OSCP in nagios.cfg:
 "ocsp_command=obsessive_service_handler"
 ```
 
-Then defined a new command named `obsessive_service_handler`:
+Then define a new command named `obsessive_service_handler`:
 
 ```commands.cfg
 define command {
