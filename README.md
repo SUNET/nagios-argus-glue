@@ -10,6 +10,10 @@ This is a glue service for integration between
 Provided that the check is enabled for notification and it matches the criteria of raising a new or 
 closing an existing alarm, an update will be sent to Argus using the Argus API.
 
+# Criteria Flow
+
+![Diagram Flow](Nagios-argus-diagram.png)
+
 ## Configuration
 
 Make use of the Obsess Feature in Nagios to use this glue-service.
