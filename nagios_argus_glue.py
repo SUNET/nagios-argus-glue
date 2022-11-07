@@ -23,10 +23,11 @@ def myfunc(argv,config_token):
     arg_lastservicestateid=0
     debug=0
     sync=0
+    test_api=0
     arg_help = "{0} -d <description> --hostname <hostname> -s --servicestateid <id> --lastservicestateid <id> --lastproblemid <id> --problemid <id> --test --notification <id> --notification_number <#>".format(argv[0])
 
     try:
-        opts, args = getopt.getopt(argv[1:], "hi:u:o:", ["help", "description=","hostname=", "servicestateid=", "lastservicestateid=", "lastproblemid=", "problemid=", "notification=", "notification_number=","test","sync"])
+        opts, args = getopt.getopt(argv[1:], "hi:u:o:", ["help", "description=","hostname=", "servicestateid=", "lastservicestateid=", "lastproblemid=", "problemid=", "notification=", "notification_number=","debug","sync","test-api"])
     except:
         print(arg_help)
         sys.exit(2)
@@ -53,7 +54,9 @@ def myfunc(argv,config_token):
             arg_notification = arg
         elif opt in ("--notification_number"):
             arg_notification_number = arg
-        elif opt in ("--test"):
+        elif opt in ("--test-api"):
+            test_api=1
+        elif opt in ("--debug"):
             debug=1
         elif opt in ("--sync"):
             sync=1
@@ -67,6 +70,17 @@ def myfunc(argv,config_token):
         print('problemid:', arg_problemid)
         print('lastproblemid:', arg_lastproblemid)
 
+    if test_api==1:
+        try:
+            client = Client(api_root_url="https://argus.cnaas.sunet.se:9000/api/v1", token=config_token)
+            incidents = client.get_incidents(open=True)
+            next(incidents, None)
+            print(
+                "Argus API is accessible at {}".format(client.api.api_root_url), file=sys.stderr
+            )
+        except:
+            sys.exit(2)
+        sys.exit(0)
 
     # TODO find a way to syncronize argus and nagios
     #   if sync==1:
