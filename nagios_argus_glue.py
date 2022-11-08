@@ -134,7 +134,7 @@ def myfunc(argv,config_token):
                 for incident in c.get_my_incidents(open=True):
                     if debug==1: print(incident.source_incident_id)
                     #Service recovery notification still contains the problemId in the problemID variable, Hosts however move it over to lastproblemID
-                    if(incident.source_incident_id==arg_problemid or incident.source_incident_id==arg_lastproblemid):
+                    if(incident.source_incident_id in (arg_problemid,arg_lastproblemid)):
                         if debug==1:
                             print("source_ident_identical")
                             print(incident.pk)
