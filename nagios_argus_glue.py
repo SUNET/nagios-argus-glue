@@ -64,12 +64,15 @@ def myfunc(argv,config_token):
 
     #Debug purpose
     if debug==1:
+        print("---- START ---")
         print('description:', arg_description)
         print('hostname:', arg_hostname)
         print('servicestateid:', arg_servicestateid)
         print('lastservicestateid:', arg_lastservicestateid)
         print('problemid:', arg_problemid)
         print('lastproblemid:', arg_lastproblemid)
+        print('notification:', arg_notification)
+        print('notification_number:', arg_notification_number)
 
     if test_api==1:
         try:
@@ -105,6 +108,7 @@ def myfunc(argv,config_token):
 
     #If Notification are disabled for the Service - EXIT Follows $SERVICENOTIFICATIONENABLED$
     if (arg_notification == "NO" ):
+        if debug==1: print("---- END --- No notification on this check")
         sys.exit(0)
 
     # Create incident with argus
@@ -115,31 +119,37 @@ def myfunc(argv,config_token):
         #Check for state change 
         if(int(arg_servicestateid)==int(arg_lastservicestateid)):
             #No state change - exit
+            if debug==1: print("---- END --- Check is still green")
             sys.exit(0)
         else:
             #State changed - clear case i Argus
-            print('Clear incident')
-            print(argv)
+            if debug==1: print('Clear incident')
             #Create child process to notify ARGUS and  release nagios-check (parent) process
             fork_pid = os.fork()
+            if debug==1: print('PID',fork_pid)
             if fork_pid == 0 :
                 #Initiate argus-client object TODO read api_root_url from config file
                 c = Client(api_root_url="https://argus.cnaas.sunet.se:9000/api/v1", token=config_token)
                 #Loop through incidents on Argus
                 for incident in c.get_my_incidents(open=True):
-                    if debug==1:
-                        print(incident.source_incident_id)
-                    if(incident.source_incident_id==arg_problemid):
+                    if debug==1: print(incident.source_incident_id)
+                    #Service recovery notification still contains the problemId in the problemID variable, Hosts however move it over to lastproblemID
+                    if(incident.source_incident_id==arg_problemid or incident.source_incident_id==arg_lastproblemid):
                         if debug==1:
                             print("source_ident_identical")
                             print(incident.pk)
-                            print("DEBUG FLAG DETECTED - nothing sent to argus")
+                            print("DEBUG FLAG DETECTED - clear notification not sent to argus")
+                            print("---- END --- Argus will take it from here")
+                            sys.exit(0)
                         else:
 #                           print("PRODUCTION - sending to argus")
                             c.resolve_incident(incident=incident.pk, description=arg_hostname+'-'+arg_description[0:115], timestamp=datetime.now())
                         sys.exit(0)
+                if debug==1: print("---- END --- No matching incidents found")
+                sys.exit(0)
             #Terminate nagios-check (parent) process
             elif fork_pid > 0:
+                if debug==1: print("---- END --- PID is out, descendant takes over")
                 sys.exit(0)
             else:
                 print("Sorry!! Child Process creation has failed...")
@@ -148,6 +158,7 @@ def myfunc(argv,config_token):
     elif (int(arg_servicestateid)>0):
         #Check Notification-Number, create ticket on first notification, exit otherwise
         if(int(arg_notification_number)==0 or int(arg_notification_number)>1):
+            if debug==1: print("---- END --- Argus is already aware of this issue")
             sys.exit(0)
         elif (int(arg_notification_number)==1):
             #Create child process to notify ARGUS and  release nagios-check (parent) process
@@ -165,14 +176,16 @@ def myfunc(argv,config_token):
                     }
                 )
                 if debug==1:
-                    print("DEBUG FLAG DETECTED - nothing sent to argus")
+                    print("DEBUG FLAG DETECTED - create notification not  sent to argus")
                     print(argus_level)
+                    print("---- END --- Argus will take it from here")
+                    sys.exit(0)
                 else:
-                    print("PRODUCTION - sending to argus")
                     output = c.post_incident(i)
                 sys.exit(0)
             #Terminate nagios-check (parent) process
             elif fork_pid > 0:
+                if debug==1: print("---- END --- PID is out, descendant takes over")
                 sys.exit(0)
             else:
                 print("Sorry!! Child Process creation has failed...")
