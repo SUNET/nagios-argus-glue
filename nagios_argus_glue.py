@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 import sys
 import getopt
+import os
 
 from pyargus.client import Client
 from pyargus.models import Incident
@@ -119,44 +120,63 @@ def myfunc(argv,config_token):
             #State changed - clear case i Argus
             print('Clear incident')
             print(argv)
-            #Initiate argus-client object TODO read api_root_url from config file
-            c = Client(api_root_url="https://argus.cnaas.sunet.se:9000/api/v1", token=config_token)
-            #Loop through incidents on Argus
-            for incident in c.get_my_incidents(open=True):
-                if debug==1:
-                    print(incident.source_incident_id)
-                if(incident.source_incident_id==arg_problemid):
+            #Create child process to notify ARGUS and  release nagios-check (parent) process
+            fork_pid = os.fork()
+            if fork_pid == 0 :
+                #Initiate argus-client object TODO read api_root_url from config file
+                c = Client(api_root_url="https://argus.cnaas.sunet.se:9000/api/v1", token=config_token)
+                #Loop through incidents on Argus
+                for incident in c.get_my_incidents(open=True):
                     if debug==1:
-                        print("source_ident_identical")
-                        print(incident.pk)
-                        print("TEST FLAG DETECTED - nothing sent to argus")
-                    else:
-#                        print("PRODUCTION - sending to argus")
-                        c.resolve_incident(incident=incident.pk, description=arg_hostname+'-'+arg_description[0:115], timestamp=datetime.now())
+                        print(incident.source_incident_id)
+                    if(incident.source_incident_id==arg_problemid):
+                        if debug==1:
+                            print("source_ident_identical")
+                            print(incident.pk)
+                            print("DEBUG FLAG DETECTED - nothing sent to argus")
+                        else:
+#                           print("PRODUCTION - sending to argus")
+                            c.resolve_incident(incident=incident.pk, description=arg_hostname+'-'+arg_description[0:115], timestamp=datetime.now())
                         sys.exit(0)
+            #Terminate nagios-check (parent) process
+            elif fork_pid > 0:
+                sys.exit(0)
+            else:
+                print("Sorry!! Child Process creation has failed...")
+                sys.exit(2)
 
     elif (int(arg_servicestateid)>0):
         #Check Notification-Number, create ticket on first notification, exit otherwise
         if(int(arg_notification_number)==0 or int(arg_notification_number)>1):
             sys.exit(0)
         elif (int(arg_notification_number)==1):
-            #Initiate argus-client object TODO read api_root_url from config file
-            c = Client(api_root_url="https://argus.cnaas.sunet.se:9000/api/v1", token=config_token)
-            i = Incident(
-                description=arg_hostname+'-'+arg_description[0:115], #Merge hostname + trunked description for better visibility in argus
-                start_time=datetime.now(),
-                source_incident_id=arg_problemid,
-                level=argus_level, #make logic for this (now 1-1 translation from nagios to argus)
-                tags={
-                    "host" : arg_hostname
-                }
-            )
-            if debug==1:
-                print("TEST FLAG DETECTED - nothing sent to argus")
-                print(argus_level)
+            #Create child process to notify ARGUS and  release nagios-check (parent) process
+            fork_pid = os.fork()
+            if fork_pid == 0 :
+                #Initiate argus-client object TODO read api_root_url from config file
+                c = Client(api_root_url="https://argus.cnaas.sunet.se:9000/api/v1", token=config_token)
+                i = Incident(
+                    description=arg_hostname+'-'+arg_description[0:115], #Merge hostname + trunked description for better visibility in argus
+                    start_time=datetime.now(),
+                    source_incident_id=arg_problemid,
+                    level=argus_level, #make logic for this (now 1-1 translation from nagios to argus)
+                    tags={
+                        "host" : arg_hostname
+                    }
+                )
+                if debug==1:
+                    print("DEBUG FLAG DETECTED - nothing sent to argus")
+                    print(argus_level)
+                else:
+                    print("PRODUCTION - sending to argus")
+                    output = c.post_incident(i)
+                sys.exit(0)
+            #Terminate nagios-check (parent) process
+            elif fork_pid > 0:
+                sys.exit(0)
             else:
-                print("PRODUCTION - sending to argus")
-                output = c.post_incident(i)
+                print("Sorry!! Child Process creation has failed...")
+                sys.exit(2)
 
 
 if __name__ == "__main__":
