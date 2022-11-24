@@ -35,3 +35,7 @@ define command {
 ```
 
 Apply the same logic for `obsess_over_hosts` and `obsessive_host_handler`
+
+#### Powered by
+
+![SUNET ASCII](SUNET_LOGO.txt)

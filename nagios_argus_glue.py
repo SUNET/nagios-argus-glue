@@ -8,6 +8,7 @@ from pyargus.models import Incident
 from datetime import datetime
 
 from config import config_token
+from config import config_url
 
 # INPUT ARGUMENT
 # Example
@@ -17,12 +18,30 @@ debug = 0
 validate = 0
 
 
-def createIncident(config_token, problemid, hostname, description, level):
+def getSeverity(servicestate):
+    # This will set the <level 1-5> to be sent to Argus
+    # 5=Information
+    # 4=Low
+    # 3=Moderate
+    # 2=High
+    # 1=Critical
+    # Create logic and set i.level= X #X= suitable level in argus according to above
+    if servicestate in ('UNREACHABLE', 'UNKNOWN'):
+        return 3
+    elif servicestate in ('CRITICAL', 'DOWN'):
+        return 2
+    elif servicestate in ('WARNING'):
+        return 4
+    else:
+        return 5
+
+
+def createIncident(config_token, config_url, problemid, hostname, description, level):
     # Create child process to notify ARGUS and  release nagios-check (parent) process
     fork_pid = os.fork()
     if fork_pid == 0:
         # Initiate argus-client object TODO read api_root_url from config file
-        c = Client(api_root_url="https://argus.cnaas.sunet.se:9000/api/v1", token=config_token)
+        c = Client(api_root_url=config_url, token=config_token)
         i = Incident(
             description=hostname+'-'+description[0:115],  # Merge hostname + trunked description for better visibility in argus
             start_time=datetime.now(),
@@ -49,7 +68,7 @@ def createIncident(config_token, problemid, hostname, description, level):
         sys.exit(2)
 
 
-def closeIncident(config_token, problemid, lastproblemid, hostname, close_description):
+def closeIncident(config_token, config_url, problemid, lastproblemid, hostname, close_description):
     # State changed - clear case i Argus
     log(debug, 'Clear incident')
     # Create child process to notify ARGUS and  release nagios-check (parent) process
@@ -57,7 +76,7 @@ def closeIncident(config_token, problemid, lastproblemid, hostname, close_descri
     log(debug, 'PID {}'.format(fork_pid))
     if fork_pid == 0:
         # Initiate argus-client object TODO read api_root_url from config file
-        c = Client(api_root_url="https://argus.cnaas.sunet.se:9000/api/v1", token=config_token)
+        c = Client(api_root_url=config_url, token=config_token)
         # Loop through incidents on Argus
         for incident in c.get_my_incidents(open=True):
             log(debug, incident.source_incident_id)
@@ -88,15 +107,15 @@ def log(log_level, message):
         print(message)
 
 
-def myfunc(argv, config_token):
+def processNagiosResult(argv, config_token, config_url):
     arg_servicestateid = 0
     arg_lastservicestateid = 0
     sync = 0
     test_api = 0
-    arg_help = ("{0} -d <description> --hostname <hostname> -s --servicestateid <id> --lastservicestateid <id> --lastproblemid <id> --problemid <id> --test --notification <id> --notification_number <#>".format(argv[0]))
+    arg_help = ("{0} -d <description> --hostname <hostname> -s --servicestateid <id> --lastservicestateid <id> --lastproblemid <id> --problemid <id> --test --notification <id> --max_attempts <#> --attempt_number <#> --servicestate <state> ".format(argv[0]))
 
     try:
-        opts, args = getopt.getopt(argv[1:], "hi:u:o:", ["help", "description=", "hostname=", "servicestateid=", "lastservicestateid=", "lastproblemid=", "problemid=", "notification=", "notification_number=", "debug", "sync", "test-api", "validate"])
+        opts, args = getopt.getopt(argv[1:], "hi:u:o:", ["help", "description=", "hostname=", "servicestateid=", "lastservicestateid=", "lastproblemid=", "problemid=", "notification=", "max_attempts=", "attempt_number=", "servicestate=", "debug", "sync", "test-api", "validate"])
     except any:
         print(arg_help)
         sys.exit(2)
@@ -119,8 +138,12 @@ def myfunc(argv, config_token):
             arg_lastservicestateid = int(arg)
         elif opt in ("--notification"):
             arg_notification = arg
-        elif opt in ("--notification_number"):
-            arg_notification_number = int(arg)
+        elif opt in ("--servicestate"):
+            arg_servicestate = arg
+        elif opt in ("--attempt_number"):
+            arg_attempt_number = int(arg)
+        elif opt in ("--max_attempts"):
+            arg_max_attempts = int(arg)
         elif opt in ("--test-api"):
             test_api = 1
         elif opt in ("--debug"):
@@ -134,7 +157,7 @@ def myfunc(argv, config_token):
 
     if test_api == 1:
         try:
-            client = Client(api_root_url="https://argus.cnaas.sunet.se:9000/api/v1", token=config_token)
+            client = Client(api_root_url=config_url, token=config_token)
             incidents = client.get_incidents(open=True)
             next(incidents, None)
             print(
@@ -152,27 +175,18 @@ def myfunc(argv, config_token):
     log(debug, 'description: {}'.format(arg_description))
     log(debug, 'hostname: {}'.format(arg_hostname))
     log(debug, 'servicestateid: {}'.format(arg_servicestateid))
+    log(debug, 'servicestate: {}'.format(arg_servicestate))
     log(debug, 'lastservicestateid: {}'.format(arg_lastservicestateid))
     log(debug, 'problemid: {}'.format(arg_problemid))
     log(debug, 'lastproblemid: {}'.format(arg_lastproblemid))
     log(debug, 'notification: {}'.format(arg_notification))
-    log(debug, 'notification_number: {}'.format(arg_notification_number))
+    log(debug, 'attempt number: {}'.format(arg_attempt_number))
+    log(debug, 'max attempts: {}'.format(arg_max_attempts))
 
     # TODO find a way to syncronize argus and nagios
     if sync == 1:
         log(debug, "---- END --- SYNC Funtion not yet in place")
         sys.exit(0)
-
-    # TODO Create logic for Info,Warning,Critical
-    # This will set the <level 1-5> to be sent to Argus
-    # 5=Information
-    # 4=Low
-    # 3=Moderate
-    # 2=High
-    # 1=Critical
-
-    # Create logic and set i.level= X #X= suitable level in argus according to above
-    argus_level = 4
 
     # Description of macros in nagios
     # https://assets.nagios.com/downloads/nagioscore/docs/nagioscore/4/en/macrolist.html
@@ -193,18 +207,18 @@ def myfunc(argv, config_token):
             log(debug, "---- END --- Check is still green")
             sys.exit(0)
         else:
-            closeIncident(config_token=config_token, problemid=arg_problemid, lastproblemid=arg_lastproblemid, hostname=arg_hostname, close_description=arg_description)
+            closeIncident(config_token=config_token, config_url=config_url, problemid=arg_problemid, lastproblemid=arg_lastproblemid, hostname=arg_hostname, close_description=arg_description)
     elif arg_servicestateid > 0:
-        # Check Notification-Number, create ticket on first notification,
+        # Check if attempt number is the same as max attempts configured for the check, create ticket.
         # exit otherwise
-        if (arg_notification_number == 0 or arg_notification_number > 1):
-            log(debug, "---- END --- Argus is already aware of this issue")
+        if arg_max_attempts != arg_attempt_number:
+            log(debug, "---- END --- Argus is already aware of this issue (Or issue not critical enough)")
             sys.exit(0)
-        elif arg_notification_number == 1:
-            createIncident(config_token, arg_problemid, arg_hostname, arg_description, argus_level)
+        elif arg_max_attempts == arg_attempt_number:
+            createIncident(config_token, config_url, arg_problemid, arg_hostname, arg_description, getSeverity(arg_servicestate))
         else:
             sys.exit(0)
 
 
 if __name__ == "__main__":
-    myfunc(sys.argv, config_token)
+    processNagiosResult(sys.argv, config_token, config_url)
